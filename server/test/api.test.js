@@ -8,7 +8,7 @@ import path from 'node:path';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'samc-test-'));
 process.env.DATA_DIR = dir;
 process.env.ADMIN_PASSWORD = 'admin-test-123';
-const { app } = await import('../src/index.js');
+const { app } = await import('../src/app.js');
 
 let server, base, token;
 const call = async (method, url, body, tok = token) => {

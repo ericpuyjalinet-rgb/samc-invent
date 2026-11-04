@@ -5,9 +5,9 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "dev": "node --no-warnings --watch src/index.js",
-    "start": "node --no-warnings src/index.js",
-    "seed": "node --no-warnings src/seed.js",
+    "dev": "node run.cjs src/index.js --watch",
+    "start": "node run.cjs src/index.js",
+    "seed": "node run.cjs src/seed.js",
     "test": "node --no-warnings --test test/*.test.js"
   },
   "dependencies": {
@@ -16,5 +16,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }

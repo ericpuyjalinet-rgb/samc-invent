@@ -31,7 +31,7 @@ Logiciel d'inventaire d'équipements : matériel informatique, mobilier de burea
 
 ## Démarrage rapide
 
-Prérequis : **Node.js 22+** (la base SQLite intégrée à Node est utilisée, aucun serveur de base de données à installer).
+Prérequis : **Node.js 22.5 ou plus récent** — version LTS recommandée (https://nodejs.org). La base SQLite intégrée à Node est utilisée : aucun serveur de base de données à installer. Vérifiez avec `node -v`.
 
 ```bash
 npm install
@@ -49,6 +49,15 @@ Comptes de démonstration (après `npm run seed`) :
 | Agent | agent@samc.local | agent1234 |
 
 Sans `seed`, seul le compte administrateur est créé au premier démarrage (`ADMIN_EMAIL` / `ADMIN_PASSWORD`, par défaut `admin@samc.local` / `admin1234`). **Changez ce mot de passe** (Paramètres).
+
+### En cas de problème
+
+| Symptôme | Solution |
+|---|---|
+| `Node.js … détecté : la version 22.5 ou supérieure est requise` ou `No such built-in module: node:sqlite` | Installer Node.js LTS (22 ou 24) depuis https://nodejs.org, fermer puis rouvrir le terminal |
+| `Le port 3000 est déjà utilisé` | Changer de port — PowerShell : `$env:PORT=3001; npm start` · Linux/macOS : `PORT=3001 npm start` |
+| Page blanche ou « Cannot GET / » | `npm run build` n'a pas été exécuté (ou a échoué) |
+| `npm` introuvable / scripts bloqués sous Windows | Utiliser « Invite de commandes » (cmd) ou exécuter `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` dans PowerShell |
 
 ### Développement
 
