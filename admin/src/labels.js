@@ -48,3 +48,6 @@ export const fmtMoney = (n) => (n === null || n === undefined || n === '' ? '—
 export const locLabel = (x) => x && (x.location_name || x.name)
   ? [x.site_name, x.building && `Bât. ${x.building}`, x.floor && `Ét. ${x.floor}`, x.location_name || x.name].filter(Boolean).join(' › ')
   : 'Non localisé';
+
+/** URL d'une photo : absolue (Supabase Storage) ou fichier local servi sous /uploads/. */
+export const photoUrl = (p) => (!p ? null : /^https?:\/\//.test(p) ? p : `/uploads/${p}`);

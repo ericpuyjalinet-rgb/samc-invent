@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'node:url';
-import { db, UPLOAD_DIR } from './db.js';
+import { db, ready, UPLOAD_DIR } from './db.js';
 import { authenticate, requireRole, MANAGERS } from './auth.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -16,19 +16,25 @@ import dashboardRoutes from './routes/dashboard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Compte administrateur initial
-if (db.prepare('SELECT COUNT(*) n FROM users').get().n === 0) {
-  const email = process.env.ADMIN_EMAIL || 'admin@samc.local';
-  const password = process.env.ADMIN_PASSWORD || 'admin1234';
-  db.prepare(`INSERT INTO users(email, name, password_hash, role) VALUES (?, 'Administrateur', ?, 'admin')`)
-    .run(email, bcrypt.hashSync(password, 10));
-  console.log(`[SAMC Invent] Compte administrateur créé : ${email} / ${password} (à changer !)`);
-}
+// Initialisation : schéma + compte administrateur initial
+export const init = (async () => {
+  await ready;
+  const { n } = await db.get('SELECT COUNT(*) AS n FROM users');
+  if (n === 0) {
+    const email = process.env.ADMIN_EMAIL || 'admin@samc.local';
+    const password = process.env.ADMIN_PASSWORD || 'admin1234';
+    await db.run(`INSERT INTO users(email, name, password_hash, role) VALUES (?, 'Administrateur', ?, 'admin') ON CONFLICT DO NOTHING`,
+      email, bcrypt.hashSync(password, 10));
+    console.log(`[SAMC Invent] Compte administrateur créé : ${email}${process.env.ADMIN_PASSWORD ? '' : ' / admin1234'} (mot de passe à changer !)`);
+  }
+})();
 
 export const app = express();
 app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '25mb' })); // les relevés mobiles peuvent contenir des photos
+// Attendre l'initialisation de la base avant de servir l'API (démarrage à froid serverless)
+app.use('/api', (req, res, next) => { init.then(() => next(), next); });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, name: 'SAMC Invent', time: new Date().toISOString() }));
 app.use('/api/auth', authRoutes);

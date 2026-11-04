@@ -1,6 +1,9 @@
 node_modules/
 dist/
-server/data/*.db*
-server/data/uploads/
+server/data/
 .env
 *.log
+/public/
+.vercel/
+supabase/.temp/
+supabase/.branches/

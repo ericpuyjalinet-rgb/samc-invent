@@ -6,7 +6,7 @@ import { Empty, Field, MapBadge, Modal, Progress, Spinner, Stat, useConfirm, use
 import { useRefs } from '../components/refs.js';
 import CampaignForm from '../components/CampaignForm.jsx';
 import QrImg from '../components/QrImg.jsx';
-import { CAMPAIGN_STATUS, CONDITION, fmtDate, fmtDateTime, locLabel } from '../labels.js';
+import { CAMPAIGN_STATUS, CONDITION, fmtDate, fmtDateTime, locLabel, photoUrl } from '../labels.js';
 
 const TABS = [
   { key: 'locations', label: 'Par salle' },
@@ -183,7 +183,7 @@ function ReportTable({ kind, rows, campaign, onResolve, onRemove }) {
             <td>{sc.unknown_label || '—'}<div className="small muted">{categories.find((x) => x.id === sc.unknown_category_id)?.name}</div></td>
             <td className="small">{sc.site_name} › {sc.location_name}</td>
             <td><MapBadge map={CONDITION} value={sc.condition} /></td>
-            <td className="small">{sc.comment}{sc.photo && <div><a href={`/uploads/${sc.photo}`} target="_blank" rel="noreferrer">📷 Voir la photo</a></div>}</td>
+            <td className="small">{sc.comment}{sc.photo && <div><a href={photoUrl(sc.photo)} target="_blank" rel="noreferrer">📷 Voir la photo</a></div>}</td>
             <td className="small">{sc.user_name}<div className="muted">{fmtDateTime(sc.scanned_at)}</div></td>
             <td className="actions">
               {campaign.status !== 'brouillon' && <button className="btn btn-sm btn-primary" onClick={() => onResolve(sc)}>Intégrer au parc</button>}{' '}
@@ -207,7 +207,7 @@ function ReportTable({ kind, rows, campaign, onResolve, onRemove }) {
             <MapBadge map={CONDITION} value={sc.condition} />
             {sc.condition && sc.asset && sc.condition !== sc.asset.condition && <div className="small muted">était : {CONDITION[sc.asset.condition]?.label}</div>}
           </td>
-          <td className="small">{sc.comment}{sc.photo && <div><a href={`/uploads/${sc.photo}`} target="_blank" rel="noreferrer">📷 Photo</a></div>}</td>
+          <td className="small">{sc.comment}{sc.photo && <div><a href={photoUrl(sc.photo)} target="_blank" rel="noreferrer">📷 Photo</a></div>}</td>
           <td className="small">{sc.user_name}<div className="muted">{fmtDateTime(sc.scanned_at)}</div></td>
           {canEdit && <td className="actions"><button className="link-btn danger small" onClick={() => onRemove(sc.id)}>Supprimer</button></td>}
         </tr>))}

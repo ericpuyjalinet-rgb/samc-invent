@@ -1,8 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { UPLOAD_DIR } from './db.js';
-
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -26,16 +21,6 @@ export function pickAll(obj, keys) {
   const out = {};
   for (const k of keys) out[k] = nullIfEmpty(obj?.[k]);
   return out;
-}
-
-/** Enregistre une image envoyée en data URL (base64), retourne le nom de fichier. */
-export function saveDataUrl(dataUrl) {
-  const m = /^data:image\/(png|jpe?g|webp);base64,(.+)$/i.exec(dataUrl || '');
-  if (!m) return null;
-  const ext = m[1].toLowerCase().replace('jpeg', 'jpg');
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), Buffer.from(m[2], 'base64'));
-  return name;
 }
 
 // ---- CSV (séparateur ; pour compatibilité Excel FR) ----

@@ -78,8 +78,16 @@ export function syncCampaign(campaignId) {
     const db = await dbp;
     const ops = await db.getAllFromIndex('ops', 'campaign', campaignId);
     let sent = 0; let failed = 0; let stats = null;
-    for (let i = 0; i < ops.length; i += 15) {
-      const batch = ops.slice(i, i + 15);
+    // Lots limités en taille (Vercel accepte 4,5 Mo par requête ; les photos pèsent ~200 Ko)
+    const batches = [];
+    let cur = []; let size = 0;
+    for (const o of ops) {
+      const s = JSON.stringify(o.scan || o).length;
+      if (cur.length && (size + s > 3_000_000 || cur.length >= 25)) { batches.push(cur); cur = []; size = 0; }
+      cur.push(o); size += s;
+    }
+    if (cur.length) batches.push(cur);
+    for (const batch of batches) {
       const res = await api(`/mobile/campaigns/${campaignId}/sync`, {
         method: 'POST', timeout: 60000,
         body: { ops: batch.map((o) => (o.type === 'delete' ? { type: 'delete', client_uuid: o.client_uuid } : { type: 'upsert', scan: o.scan })) },

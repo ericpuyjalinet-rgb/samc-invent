@@ -7,8 +7,11 @@ import path from 'node:path';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'samc-test-'));
 process.env.DATA_DIR = dir;
+if (!process.env.DATABASE_URL) process.env.PGLITE_DIR = 'memory://';
 process.env.ADMIN_PASSWORD = 'admin-test-123';
-const { app } = await import('../src/app.js');
+const { app, init } = await import('../src/app.js');
+const { closeDb } = await import('../src/db.js');
+await init;
 
 let server, base, token;
 const call = async (method, url, body, tok = token) => {
@@ -24,7 +27,7 @@ before(async () => {
   base = `http://localhost:${server.address().port}/api`;
   token = (await call('POST', '/auth/login', { email: 'admin@samc.local', password: 'admin-test-123' })).body.token;
 });
-after(() => { server.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+after(async () => { server.close(); await closeDb(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 test('authentification requise et identifiants vérifiés', async () => {
   assert.equal((await call('GET', '/assets', null, null)).status, 401);

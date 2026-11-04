@@ -1,8 +1,9 @@
 // Jeu de données de démonstration : node src/seed.js
 import bcrypt from 'bcryptjs';
-import { db, tx, nextAssetCode, logHistory } from './db.js';
+import { db, ready, tx, nextAssetCode, logHistory } from './db.js';
 
-const count = db.prepare('SELECT COUNT(*) n FROM assets').get().n;
+await ready;
+const { n: count } = await db.get('SELECT COUNT(*) AS n FROM assets');
 if (count > 0 && !process.argv.includes('--force')) {
   console.log(`La base contient déjà ${count} équipements. Utilisez --force pour ajouter quand même les données de démo.`);
   process.exit(0);
@@ -15,10 +16,10 @@ const users = [
   ['agent@samc.local', 'Paul Agent', 'agent', 'agent1234'],
 ];
 
-tx(() => {
+await tx(async (t) => {
   for (const [email, name, role, pwd] of users) {
-    db.prepare('INSERT OR IGNORE INTO users(email, name, role, password_hash) VALUES (?, ?, ?, ?)')
-      .run(email, name, role, bcrypt.hashSync(pwd, 10));
+    await t.run('INSERT INTO users(email, name, role, password_hash) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING',
+      email, name, role, bcrypt.hashSync(pwd, 10));
   }
   const cats = [
     ['Ordinateur portable', 'informatique', 4], ['Ordinateur fixe', 'informatique', 5], ['Écran', 'informatique', 5],
@@ -26,12 +27,12 @@ tx(() => {
     ['Bureau', 'mobilier', 10], ['Fauteuil de bureau', 'mobilier', 10], ['Armoire', 'mobilier', 10],
     ['Caisson', 'mobilier', 10], ['Table de réunion', 'mobilier', 10], ['Climatiseur mobile', 'autre', 5],
   ];
-  for (const [n, f, d] of cats) db.prepare('INSERT OR IGNORE INTO categories(name, family, depreciation_years) VALUES (?, ?, ?)').run(n, f, d);
-  const catId = Object.fromEntries(db.prepare('SELECT id, name FROM categories').all().map((c) => [c.name, c.id]));
+  for (const [n, f, d] of cats) await t.run('INSERT INTO categories(name, family, depreciation_years) VALUES (?, ?, ?) ON CONFLICT DO NOTHING', n, f, d);
+  const catId = Object.fromEntries((await t.all('SELECT id, name FROM categories')).map((c) => [c.name, c.id]));
 
   const sites = [['Siège', '12 avenue de la République, 75011 Paris'], ['Agence Lyon', '5 rue de la Part-Dieu, 69003 Lyon']];
-  for (const [n, a] of sites) db.prepare('INSERT OR IGNORE INTO sites(name, address) VALUES (?, ?)').run(n, a);
-  const siteId = Object.fromEntries(db.prepare('SELECT id, name FROM sites').all().map((s) => [s.name, s.id]));
+  for (const [n, a] of sites) await t.run('INSERT INTO sites(name, address) VALUES (?, ?) ON CONFLICT DO NOTHING', n, a);
+  const siteId = Object.fromEntries((await t.all('SELECT id, name FROM sites')).map((s) => [s.name, s.id]));
   const locs = [
     ['Siège', 'A', 'RDC', 'Accueil', 'LOC-A0-ACC'], ['Siège', 'A', '1', 'Bureau 101', 'LOC-A1-101'],
     ['Siège', 'A', '1', 'Bureau 102', 'LOC-A1-102'], ['Siège', 'A', '1', 'Salle de réunion Horizon', 'LOC-A1-SRH'],
@@ -39,8 +40,8 @@ tx(() => {
     ['Siège', 'B', 'SS', 'Stock / Réserve', 'LOC-BS-STK'],
     ['Agence Lyon', null, 'RDC', 'Bureau commercial', 'LOC-LY-COM'], ['Agence Lyon', null, '1', 'Salle de formation', 'LOC-LY-FOR'],
   ];
-  for (const [s, b, f, n, c] of locs) db.prepare('INSERT OR IGNORE INTO locations(site_id, building, floor, name, code) VALUES (?, ?, ?, ?, ?)').run(siteId[s], b, f, n, c);
-  const locIds = db.prepare('SELECT id, name FROM locations').all();
+  for (const [s, b, f, n, c] of locs) await t.run('INSERT INTO locations(site_id, building, floor, name, code) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING', siteId[s], b, f, n, c);
+  const locIds = await t.all('SELECT id, name FROM locations');
   const stock = locIds.find((l) => l.name === 'Stock / Réserve');
 
   const models = [
@@ -57,7 +58,7 @@ tx(() => {
     ['Table de réunion', 'Table de réunion 8 places', [['Majencia', 'Arko', 890]]],
   ];
   const people = ['Jean Dupont', 'Marie Martin', 'Luc Bernard', 'Sophie Petit', 'Karim Haddad', 'Emma Leroy', null, null];
-  const user = db.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get();
+  const user = await t.get(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`);
   for (let i = 0; i < 120; i++) {
     const [cat, label, opts] = rand(models);
     const [brand, model, price] = rand(opts);
@@ -66,14 +67,14 @@ tx(() => {
     const date = `${year}-${String(1 + Math.floor(Math.random() * 12)).padStart(2, '0')}-${String(1 + Math.floor(Math.random() * 28)).padStart(2, '0')}`;
     const status = Math.random() < 0.08 ? 'en_stock' : Math.random() < 0.04 ? 'en_reparation' : 'en_service';
     const loc = status === 'en_stock' ? stock : rand(locIds);
-    const id = db.prepare(`INSERT INTO assets(code, label, category_id, brand, model, serial_number, location_id, assigned_to, status,
-      condition, purchase_date, purchase_price, supplier, warranty_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      nextAssetCode(), `${label} ${brand} ${model}`, catId[cat], brand, model,
+    const { lastInsertRowid: id } = await t.run(`INSERT INTO assets(code, label, category_id, brand, model, serial_number, location_id, assigned_to, status,
+      condition, purchase_date, purchase_price, supplier, warranty_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      await nextAssetCode(t), `${label} ${brand} ${model}`, catId[cat], brand, model,
       isIT ? `${brand.slice(0, 2).toUpperCase()}${Math.random().toString(36).slice(2, 10).toUpperCase()}` : null,
       loc.id, isIT ? rand(people) : null, status, rand(['neuf', 'bon', 'bon', 'bon', 'moyen', 'moyen', 'mauvais']), date,
       price, isIT ? rand(['Bechtle', 'Inmac Wstore', 'LDLC Pro']) : rand(['Bureau Vallée Pro', 'Manutan']),
-      isIT ? `${year + 3}${date.slice(4)}` : null).lastInsertRowid;
-    logHistory(id, user.id, 'creation', { source: 'démo' });
+      isIT ? `${year + 3}${date.slice(4)}` : null);
+    await logHistory(id, user.id, 'creation', { source: 'démo' }, t);
   }
 });
 console.log('Données de démonstration créées.');

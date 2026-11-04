@@ -1,21 +1,20 @@
 // Point d'entrée du serveur SAMC Invent
-const [major, minor] = process.versions.node.split('.').map(Number);
-if (major < 22 || (major === 22 && minor < 5)) {
-  console.error(`\n[SAMC Invent] Node.js ${process.versions.node} détecté : la version 22.5 ou supérieure est requise.`);
+const [major] = process.versions.node.split('.').map(Number);
+if (major < 20) {
+  console.error(`\n[SAMC Invent] Node.js ${process.versions.node} détecté : la version 20 ou supérieure est requise.`);
   console.error('Téléchargez la version LTS sur https://nodejs.org puis relancez « npm start ».\n');
   process.exit(1);
 }
 
 let app;
 try {
-  ({ app } = await import('./app.js'));
+  let init;
+  ({ app, init } = await import('./app.js'));
+  await init;
 } catch (e) {
-  if (e?.code === 'ERR_UNKNOWN_BUILTIN_MODULE' || String(e?.message).includes('node:sqlite')) {
-    console.error(`\n[SAMC Invent] Le module SQLite intégré n'est pas disponible avec Node.js ${process.versions.node}.`);
-    console.error('Installez Node.js 22.13+ (LTS) depuis https://nodejs.org, ou lancez : node --experimental-sqlite src/index.js\n');
-    process.exit(1);
-  }
-  throw e;
+  console.error('\n[SAMC Invent] Impossible de démarrer :', e?.message || e);
+  if (String(e?.message).includes('libsql')) console.error('Relancez « npm install » (module de base de données manquant).\n');
+  process.exit(1);
 }
 
 const PORT = Number(process.env.PORT) || 3000;

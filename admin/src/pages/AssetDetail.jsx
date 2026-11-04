@@ -6,7 +6,7 @@ import { MapBadge, Spinner, useConfirm, useLoad, useToast, Empty } from '../comp
 import { useRefs } from '../components/refs.js';
 import AssetForm from '../components/AssetForm.jsx';
 import QrImg from '../components/QrImg.jsx';
-import { STATUS, CONDITION, FAMILY, ACTION, FIELD_LABEL, fmtDate, fmtDateTime, fmtMoney, locLabel } from '../labels.js';
+import { STATUS, CONDITION, FAMILY, ACTION, FIELD_LABEL, fmtDate, fmtDateTime, fmtMoney, locLabel, photoUrl } from '../labels.js';
 
 export default function AssetDetail() {
   const { id } = useParams();
@@ -107,7 +107,7 @@ export default function AssetDetail() {
               <div><div className="mono" style={{ fontWeight: 700, fontSize: 15 }}>{a.code}</div><div className="small muted">À scanner avec l'application mobile</div></div>
             </div>
           </div>
-          {a.photo && <div className="card card-pad"><h3>Photo</h3><img className="photo" src={`/uploads/${a.photo}`} alt={a.label} /></div>}
+          {a.photo && <div className="card card-pad"><h3>Photo</h3><img className="photo" src={photoUrl(a.photo)} alt={a.label} /></div>}
           <div className="card card-pad">
             <h3>Historique</h3>
             <ul className="timeline">

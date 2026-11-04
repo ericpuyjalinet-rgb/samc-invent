@@ -1,184 +1,131 @@
-import { DatabaseSync } from 'node:sqlite';
+/**
+ * Accès aux données PostgreSQL.
+ *  - DATABASE_URL défini  → PostgreSQL (Supabase en production, Supabase local ou autre serveur Postgres)
+ *  - sinon                → PGlite : PostgreSQL embarqué, stocké dans server/data/pglite (aucune installation)
+ *
+ * API commune : db.get / db.all / db.run (paramètres « ? » convertis en $1, $2…) et tx(async (t) => …).
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../data');
+export const IS_VERCEL = !!process.env.VERCEL;
+export const DATA_DIR = process.env.DATA_DIR || (IS_VERCEL ? '/tmp/samc-invent' : path.resolve(__dirname, '../data'));
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+export const DB_KIND = DATABASE_URL ? 'postgres' : 'pglite';
 
-const DB_FILE = process.env.DB_FILE || path.join(DATA_DIR, 'samc-invent.db');
-export const db = new DatabaseSync(DB_FILE);
+const MIGRATIONS_DIR = [path.resolve(__dirname, '../../supabase/migrations'), path.resolve(process.cwd(), 'supabase/migrations')]
+  .find((d) => fs.existsSync(d));
 
-db.exec(`
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  name TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'agent' CHECK (role IN ('admin','gestionnaire','agent')),
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS sites (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  address TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS locations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-  code TEXT UNIQUE,
-  building TEXT,
-  floor TEXT,
-  name TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS categories (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  family TEXT NOT NULL DEFAULT 'autre' CHECK (family IN ('informatique','mobilier','autre')),
-  depreciation_years INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS assets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT NOT NULL UNIQUE,
-  label TEXT NOT NULL,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-  brand TEXT,
-  model TEXT,
-  serial_number TEXT,
-  location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-  assigned_to TEXT,
-  status TEXT NOT NULL DEFAULT 'en_service'
-    CHECK (status IN ('en_service','en_stock','en_reparation','reforme','perdu')),
-  condition TEXT NOT NULL DEFAULT 'bon'
-    CHECK (condition IN ('neuf','bon','moyen','mauvais','hs')),
-  purchase_date TEXT,
-  purchase_price REAL,
-  supplier TEXT,
-  warranty_end TEXT,
-  notes TEXT,
-  photo TEXT,
-  last_seen_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_assets_location ON assets(location_id);
-CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category_id);
-CREATE INDEX IF NOT EXISTS idx_assets_serial ON assets(serial_number);
-
-CREATE TABLE IF NOT EXISTS asset_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  action TEXT NOT NULL,
-  details TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_history_asset ON asset_history(asset_id);
-
-CREATE TABLE IF NOT EXISTS campaigns (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  description TEXT,
-  status TEXT NOT NULL DEFAULT 'brouillon' CHECK (status IN ('brouillon','en_cours','cloturee')),
-  start_date TEXT,
-  end_date TEXT,
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  closed_at TEXT
-);
-
--- Périmètre de la campagne (si vide : toutes les localisations)
-CREATE TABLE IF NOT EXISTS campaign_locations (
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-  PRIMARY KEY (campaign_id, location_id)
-);
-
--- Instantané des équipements attendus au lancement de la campagne
-CREATE TABLE IF NOT EXISTS campaign_expected (
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-  location_id INTEGER,
-  PRIMARY KEY (campaign_id, asset_id)
-);
-
-CREATE TABLE IF NOT EXISTS scans (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  client_uuid TEXT NOT NULL UNIQUE,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
-  scanned_code TEXT,
-  location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-  result TEXT NOT NULL CHECK (result IN ('trouve','deplace','inconnu')),
-  condition TEXT,
-  comment TEXT,
-  photo TEXT,
-  unknown_label TEXT,
-  unknown_category_id INTEGER,
-  resolved_asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL,
-  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  scanned_at TEXT NOT NULL,
-  synced_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_scans_campaign ON scans(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_scans_asset ON scans(asset_id);
-
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
-`);
-
-/** Exécute fn dans une transaction. */
-export function tx(fn) {
-  db.exec('BEGIN');
-  try {
-    const r = fn();
-    db.exec('COMMIT');
-    return r;
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
+if (IS_VERCEL && !DATABASE_URL) {
+  console.error('[SAMC Invent] DATABASE_URL non défini : configurez la chaîne de connexion Supabase dans Vercel.');
 }
 
-export function getSetting(key, def = null) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+/** Convertit les paramètres « ? » en $1, $2… */
+function toPg(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+const clean = (args) => args.map((v) => (v === undefined ? null : v));
+/** Les INSERT renvoient la ligne créée (pour récupérer l'identifiant). */
+const withReturning = (sql) => (/^\s*insert\b/i.test(sql) && !/\breturning\b/i.test(sql) ? `${sql} RETURNING *` : sql);
+
+// ---------------------------------------------------------------------------
+let backend; // { query(sql, args) → { rows, count }, exec(sqlMulti), begin(fn) }
+
+async function createBackend() {
+  if (DATABASE_URL) {
+    const { default: postgres } = await import('postgres');
+    const sql = postgres(DATABASE_URL, {
+      prepare: false, // compatible avec le pooler Supabase (mode transaction, port 6543)
+      max: IS_VERCEL ? 3 : 10,
+      idle_timeout: 20,
+      connect_timeout: 15,
+      onnotice: () => {},
+      ssl: /localhost|127\.0\.0\.1|sslmode=disable/.test(DATABASE_URL) ? false : 'require',
+      types: {
+        date: { to: 1082, from: [1082], serialize: (x) => x, parse: (x) => x },
+        int8: { to: 20, from: [20], serialize: (x) => String(x), parse: (x) => Number(x) },
+        numeric: { to: 1700, from: [1700], serialize: (x) => String(x), parse: (x) => Number(x) },
+      },
+    });
+    const wrap = (s) => ({
+      async query(q, args) { const rows = await s.unsafe(q, args); return { rows: [...rows], count: rows.count ?? 0 }; },
+    });
+    return { ...wrap(sql), exec: (q) => sql.unsafe(q), begin: (fn) => sql.begin((t) => fn(wrap(t))), end: () => sql.end() };
+  }
+  const { PGlite } = await import('@electric-sql/pglite');
+  const dir = process.env.PGLITE_DIR || path.join(DATA_DIR, 'pglite');
+  if (dir !== 'memory://') fs.mkdirSync(dir, { recursive: true });
+  const pg = new PGlite(dir, { parsers: { 20: Number, 1700: Number, 1082: (v) => v } });
+  const wrap = (s) => ({
+    async query(q, args) { const r = await s.query(q, args); return { rows: r.rows, count: r.affectedRows ?? 0 }; },
+  });
+  return { ...wrap(pg), exec: (q) => pg.exec(q), begin: (fn) => pg.transaction((t) => fn(wrap(t))), end: () => pg.close() };
+}
+
+function executor(get) {
+  return {
+    async get(sql, ...args) { return (await (await get()).query(toPg(sql), clean(args))).rows[0]; },
+    async all(sql, ...args) { return (await (await get()).query(toPg(sql), clean(args))).rows; },
+    async run(sql, ...args) {
+      const r = await (await get()).query(toPg(withReturning(sql)), clean(args));
+      return { changes: r.count, lastInsertRowid: r.rows[0]?.id ?? null, row: r.rows[0] };
+    },
+  };
+}
+
+/** Initialisation : connexion + application des migrations (idempotentes). */
+export const ready = (async () => {
+  backend = await createBackend();
+  if (MIGRATIONS_DIR && process.env.SKIP_MIGRATIONS !== '1') {
+    await backend.exec('CREATE TABLE IF NOT EXISTS app_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now()); ALTER TABLE app_migrations ENABLE ROW LEVEL SECURITY;');
+    const done = new Set((await backend.query('SELECT name FROM app_migrations', [])).rows.map((r) => r.name));
+    for (const f of fs.readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith('.sql')).sort()) {
+      if (done.has(f)) continue;
+      await backend.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8'));
+      await backend.query('INSERT INTO app_migrations(name) VALUES ($1) ON CONFLICT DO NOTHING', [f]);
+      console.log(`[SAMC Invent] Migration appliquée : ${f}`);
+    }
+  }
+  return backend;
+})();
+
+export const db = executor(() => ready);
+
+/** Exécute fn(t) dans une transaction ; t expose get / all / run. */
+export async function tx(fn) {
+  const b = await ready;
+  return b.begin((t) => fn(executor(async () => t)));
+}
+
+export async function closeDb() { (await ready).end?.(); }
+
+// ---------------------------------------------------------------------------
+export async function getSetting(key, def = null, x = db) {
+  const row = await x.get('SELECT value FROM settings WHERE key = ?', key);
   return row ? row.value : def;
 }
-export function setSetting(key, value) {
-  db.prepare('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .run(key, String(value));
+export async function setSetting(key, value, x = db) {
+  await x.run('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', key, String(value));
 }
 
 /** Génère le prochain code inventaire (ex. SAMC-000042). */
-export function nextAssetCode() {
-  const prefix = getSetting('code_prefix', 'SAMC');
-  const exists = db.prepare('SELECT 1 FROM assets WHERE code = ?');
-  let n = parseInt(getSetting('code_counter', '0'), 10) || 0;
+export async function nextAssetCode(x = db) {
+  const prefix = await getSetting('code_prefix', 'SAMC', x);
+  let n = parseInt(await getSetting('code_counter', '0', x), 10) || 0;
   let code;
   do {
     n += 1;
     code = `${prefix}-${String(n).padStart(6, '0')}`;
-  } while (exists.get(code));
-  setSetting('code_counter', n);
+  } while (await x.get('SELECT 1 AS ok FROM assets WHERE code = ?', code));
+  await setSetting('code_counter', n, x);
   return code;
 }
 
-export function logHistory(assetId, userId, action, details = null) {
-  db.prepare('INSERT INTO asset_history(asset_id, user_id, action, details) VALUES (?, ?, ?, ?)')
-    .run(assetId, userId ?? null, action, details ? JSON.stringify(details) : null);
+export async function logHistory(assetId, userId, action, details = null, x = db) {
+  await x.run('INSERT INTO asset_history(asset_id, user_id, action, details) VALUES (?, ?, ?, ?)',
+    assetId, userId ?? null, action, details ? JSON.stringify(details) : null);
 }
