@@ -82,7 +82,7 @@ dev/samc-invent/
 | **Local — Supabase** | Supabase local (Docker, `npx supabase start`) | Supabase Storage local | `npm run dev` | tester dans les conditions de production |
 | **Production** | Supabase cloud | Supabase Storage | Vercel | utilisation réelle |
 
-Prérequis local : **Node.js 20 ou plus récent** (LTS conseillée, https://nodejs.org) et Git. Docker Desktop uniquement pour « Local — Supabase ».
+Prérequis local : **Node.js 22 LTS** (https://nodejs.org ; Node 20+ fonctionne aussi en local) et Git. Docker Desktop uniquement pour « Local — Supabase ».
 
 ### 1. Mise en place du poste de développement (`dev/samc-invent`)
 
