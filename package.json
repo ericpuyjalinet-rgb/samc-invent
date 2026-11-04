@@ -1,0 +1,16 @@
+{
+  "name": "samc-invent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SAMC Invent - Logiciel d'inventaire d'équipements (informatique, mobilier de bureau)",
+  "workspaces": ["server", "admin", "mobile"],
+  "scripts": {
+    "dev": "concurrently -n api,admin,mobile -c blue,green,magenta \"npm run dev -w server\" \"npm run dev -w admin\" \"npm run dev -w mobile\"",
+    "build": "npm run build -w admin && npm run build -w mobile",
+    "start": "npm start -w server",
+    "seed": "npm run seed -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
