@@ -36,6 +36,9 @@ const withReturning = (sql) => (/^\s*insert\b/i.test(sql) && !/\breturning\b/i.t
 let backend; // { query(sql, args) → { rows, count }, exec(sqlMulti), begin(fn) }
 
 async function createBackend() {
+  if (IS_VERCEL && !DATABASE_URL) {
+    throw new Error('DATABASE_URL non configurée sur Vercel (chaîne de connexion Supabase « Transaction pooler »)');
+  }
   if (DATABASE_URL) {
     const { default: postgres } = await import('postgres');
     const sql = postgres(DATABASE_URL, {
@@ -92,6 +95,7 @@ export const ready = (async () => {
   }
   return backend;
 })();
+ready.catch((e) => console.error('[SAMC Invent] Base de données indisponible :', e.message));
 
 export const db = executor(() => ready);
 

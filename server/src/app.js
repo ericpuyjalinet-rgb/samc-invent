@@ -30,15 +30,22 @@ export const init = (async () => {
     console.log(`[SAMC Invent] Compte administrateur créé : ${email}${process.env.ADMIN_PASSWORD ? '' : ' / admin1234'} (mot de passe à changer !)`);
   }
 })();
+init.catch(() => {}); // erreur déjà journalisée ; les requêtes reçoivent un 503 explicite
 
 export const app = express();
 app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '25mb' })); // les relevés mobiles peuvent contenir des photos
 // Attendre l'initialisation de la base avant de servir l'API (démarrage à froid serverless)
-app.use('/api', (req, res, next) => { init.then(() => next(), next); });
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  init.then(() => next(), (e) => res.status(503).json({ error: `Service indisponible : ${e.message}` }));
+});
 
-app.get('/api/health', (req, res) => res.json({ ok: true, name: 'SAMC Invent', time: new Date().toISOString() }));
+app.get('/api/health', async (req, res) => {
+  const db = await init.then(() => 'ok', (e) => e.message);
+  res.status(db === 'ok' ? 200 : 503).json({ ok: db === 'ok', name: 'SAMC Invent', database: db, time: new Date().toISOString() });
+});
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authenticate, userRoutes);
 app.use('/api/mobile', authenticate, mobileRoutes);

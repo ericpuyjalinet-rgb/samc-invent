@@ -2,6 +2,7 @@
   "name": "samc-invent",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "SAMC Invent - Logiciel d'inventaire d'équipements (informatique, mobilier de bureau)",
   "workspaces": [
     "server",
