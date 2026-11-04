@@ -20,7 +20,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const init = (async () => {
   await ready;
   const { n } = await db.get('SELECT COUNT(*) AS n FROM users');
-  if (n === 0) {
+  if (n === 0 && process.env.VERCEL && !process.env.ADMIN_PASSWORD) {
+    console.error('[SAMC Invent] Base vide : définissez ADMIN_PASSWORD (et ADMIN_EMAIL) dans Vercel pour créer le compte administrateur.');
+  } else if (n === 0) {
     const email = process.env.ADMIN_EMAIL || 'admin@samc.local';
     const password = process.env.ADMIN_PASSWORD || 'admin1234';
     await db.run(`INSERT INTO users(email, name, password_hash, role) VALUES (?, 'Administrateur', ?, 'admin') ON CONFLICT DO NOTHING`,

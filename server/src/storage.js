@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import { UPLOAD_DIR } from './db.js';
 
 const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
-const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/$/, '');
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.replace(/\/$/, '');
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.SUPABASE_BUCKET || 'photos';
 

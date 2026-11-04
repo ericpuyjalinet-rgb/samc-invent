@@ -136,7 +136,7 @@ Puis `npm run seed` et `npm run dev`. Supabase Studio (interface d'administratio
 
 **Vercel**
 1. Pousser le projet sur GitHub, puis *Add New › Project* sur https://vercel.com et importer le dépôt (les réglages de build sont lus dans `vercel.json`, aucun à saisir).
-2. *Settings › Environment Variables* : `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+2. *Settings › Environment Variables* : `DATABASE_URL`, `SUPABASE_URL` (ou `NEXT_PUBLIC_SUPABASE_URL`), `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (obligatoire sur Vercel pour créer le premier administrateur), `JWT_SECRET` (facultatif : sinon généré et conservé dans la base).
 3. *Deploy*. Administration : `https://<projet>.vercel.app/` — mobile : `https://<projet>.vercel.app/mobile/` (HTTPS fourni par Vercel : caméra et installation PWA fonctionnent).
 4. Se connecter avec `ADMIN_EMAIL` / `ADMIN_PASSWORD` et changer le mot de passe.
 
