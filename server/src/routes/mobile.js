@@ -28,8 +28,8 @@ r.get('/campaigns/:id/bootstrap', h(async (req, res) => {
       FROM locations l JOIN sites s ON s.id = l.site_id ORDER BY s.name, l.building, l.floor, l.name`),
     expectedAssets(c),
     db.all(`SELECT a.id, a.code, a.label, a.brand, a.model, a.serial_number, a.location_id, a.status,
-        a.condition, a.assigned_to, c.name AS category_name, c.family
-      FROM assets a LEFT JOIN categories c ON c.id = a.category_id`),
+        a.condition, a.assigned_to, a.inventory_number, c.name AS category_name, c.family, sv.name AS service_name
+      FROM assets a LEFT JOIN categories c ON c.id = a.category_id LEFT JOIN services sv ON sv.id = a.service_id`),
     db.all('SELECT id, name, family FROM categories ORDER BY family, name'),
     db.all(`SELECT sc.client_uuid, sc.asset_id, sc.scanned_code, sc.location_id, sc.result, sc.condition,
         sc.comment, sc.unknown_label, sc.unknown_category_id, sc.scanned_at, sc.user_id, u.name AS user_name

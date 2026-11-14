@@ -5,7 +5,7 @@ import Scanner from '../Scanner.jsx';
 import { buildIndex, resolveCode } from '../campaign.js';
 import { conditionLabel, feedback, fullRoomLabel } from '../util.js';
 
-const STATUS = { en_service: 'En service', en_stock: 'En stock', en_reparation: 'En réparation', reforme: 'Réformé', perdu: 'Perdu' };
+const STATUS = { en_service: 'En service', en_stock: 'En stock', en_reparation: 'En réparation', reforme: 'Réformé', perdu: 'Perdu', sorti: "Sorti de l'inventaire" };
 
 export default function Lookup({ bundle, onBack }) {
   const idx = useMemo(() => (bundle ? buildIndex(bundle) : null), [bundle]);
@@ -51,6 +51,8 @@ export default function Lookup({ bundle, onBack }) {
               <dt>Marque / modèle</dt><dd>{[result.brand, result.model].filter(Boolean).join(' ') || '—'}</dd>
               <dt>N° de série</dt><dd className="mono">{result.serial_number || '—'}</dd>
               <dt>Localisation</dt><dd>{result.locLabel}</dd>
+              <dt>N° d'inventaire</dt><dd className="mono">{result.inventory_number || '—'}</dd>
+              <dt>Service</dt><dd>{result.service_name || '—'}</dd>
               <dt>Affecté à</dt><dd>{result.assigned_to || '—'}</dd>
               <dt>Statut</dt><dd>{STATUS[result.status] || '—'}</dd>
               <dt>État</dt><dd>{conditionLabel(result.condition)}</dd>

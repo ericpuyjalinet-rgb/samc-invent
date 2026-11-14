@@ -11,9 +11,9 @@ export function invalidateRefs() {
 }
 
 function load() {
-  pending = Promise.all([api('/categories'), api('/sites'), api('/locations')])
-    .then(([categories, sites, locations]) => {
-      cache = { categories, sites, locations };
+  pending = Promise.all([api('/categories'), api('/sites'), api('/locations'), api('/services')])
+    .then(([categories, sites, locations, services]) => {
+      cache = { categories, sites, locations, services };
       listeners.forEach((l) => l(cache));
       return cache;
     })
@@ -29,5 +29,5 @@ export function useRefs() {
     if (!cache && !pending) load();
     return () => listeners.delete(setRefs);
   }, []);
-  return refs || { categories: [], sites: [], locations: [] };
+  return refs || { categories: [], sites: [], locations: [], services: [] };
 }

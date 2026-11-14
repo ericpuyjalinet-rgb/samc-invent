@@ -5,41 +5,56 @@ import { db, tx, nextAssetCode, logHistory } from '../db.js';
 import { savePhoto } from '../storage.js';
 import { requireRole, MANAGERS } from '../auth.js';
 import { h, HttpError, pick, toCsv, parseCsv } from '../util.js';
+import { accountingSettings, depreciation, accountOf, ACQUISITION_MODES } from '../accounting.js';
 
 const r = Router();
 const manage = requireRole(...MANAGERS);
 
-export const STATUSES = ['en_service', 'en_stock', 'en_reparation', 'reforme', 'perdu'];
+export const STATUSES = ['en_service', 'en_stock', 'en_reparation', 'reforme', 'perdu', 'sorti'];
 export const CONDITIONS = ['neuf', 'bon', 'moyen', 'mauvais', 'hs'];
 const FIELDS = ['code', 'label', 'category_id', 'brand', 'model', 'serial_number', 'location_id', 'assigned_to',
-  'status', 'condition', 'purchase_date', 'purchase_price', 'supplier', 'warranty_end', 'notes'];
+  'status', 'condition', 'purchase_date', 'purchase_price', 'supplier', 'warranty_end', 'notes',
+  // Données de gestion publique
+  'service_id', 'inventory_number', 'account_code', 'acquisition_mode', 'fiscal_year', 'mandate_number', 'invoice_number',
+  'contract_number', 'depreciation_years', 'commissioning_date'];
 
 export const ASSET_SELECT = `
-  SELECT a.*, c.name AS category_name, c.family AS family,
-    l.name AS location_name, l.building, l.floor, l.code AS location_code, s.id AS site_id, s.name AS site_name
+  SELECT a.*, c.name AS category_name, c.family AS family, c.account_code AS category_account_code,
+    c.depreciation_years AS category_depreciation_years,
+    l.name AS location_name, l.building, l.floor, l.code AS location_code, s.id AS site_id, s.name AS site_name,
+    sv.name AS service_name
   FROM assets a
   LEFT JOIN categories c ON c.id = a.category_id
   LEFT JOIN locations l ON l.id = a.location_id
-  LEFT JOIN sites s ON s.id = l.site_id`;
+  LEFT JOIN sites s ON s.id = l.site_id
+  LEFT JOIN services sv ON sv.id = a.service_id`;
+const FROM_JOINS = `FROM assets a LEFT JOIN categories c ON c.id = a.category_id LEFT JOIN locations l ON l.id = a.location_id
+  LEFT JOIN sites s ON s.id = l.site_id LEFT JOIN services sv ON sv.id = a.service_id`;
 
 const SORTS = {
   code: 'a.code', label: 'a.label', category: 'c.name', location: 's.name, l.name', status: 'a.status',
   condition: 'a.condition', purchase_date: 'a.purchase_date', updated_at: 'a.updated_at', last_seen_at: 'a.last_seen_at',
+  inventory_number: 'a.inventory_number', service: 'sv.name', purchase_price: 'a.purchase_price',
 };
 
 function buildFilters(q) {
   const where = [];
   const params = [];
   if (q.q) {
-    where.push(`(a.code ILIKE ? OR a.label ILIKE ? OR a.brand ILIKE ? OR a.model ILIKE ? OR a.serial_number ILIKE ? OR a.assigned_to ILIKE ?)`);
+    where.push(`(a.code ILIKE ? OR a.label ILIKE ? OR a.brand ILIKE ? OR a.model ILIKE ? OR a.serial_number ILIKE ?
+      OR a.assigned_to ILIKE ? OR a.inventory_number ILIKE ? OR a.mandate_number ILIKE ? OR a.contract_number ILIKE ?)`);
     const like = `%${q.q}%`;
-    params.push(like, like, like, like, like, like);
+    params.push(like, like, like, like, like, like, like, like, like);
   }
   for (const [key, col] of [['category_id', 'a.category_id'], ['location_id', 'a.location_id'], ['site_id', 's.id'],
-    ['status', 'a.status'], ['condition', 'a.condition'], ['family', 'c.family']]) {
+    ['status', 'a.status'], ['condition', 'a.condition'], ['family', 'c.family'], ['service_id', 'a.service_id'],
+    ['fiscal_year', 'a.fiscal_year'], ['acquisition_mode', 'a.acquisition_mode']]) {
     if (q[key]) { where.push(`${col} = ?`); params.push(q[key]); }
   }
+  if (q.account_code) { where.push('COALESCE(a.account_code, c.account_code) = ?'); params.push(q.account_code); }
   if (q.no_location === '1') where.push('a.location_id IS NULL');
+  // Les biens sortis de l'inventaire restent consultables mais sont masqués par défaut
+  if (!q.status && !q.ids && q.include_exited !== '1') where.push(`a.status <> 'sorti'`);
   if (q.ids) {
     const ids = String(q.ids).split(',').map(Number).filter(Boolean);
     if (ids.length) { where.push(`a.id IN (${ids.map(() => '?').join(',')})`); params.push(...ids); }
@@ -51,10 +66,19 @@ function validate(d) {
   if (d.status && !STATUSES.includes(d.status)) throw new HttpError(400, 'Statut invalide');
   if (d.condition && !CONDITIONS.includes(d.condition)) throw new HttpError(400, 'État invalide');
   if (d.purchase_price !== undefined && d.purchase_price !== null) {
-    const n = Number(String(d.purchase_price).replace(',', '.'));
-    if (Number.isNaN(n)) throw new HttpError(400, "Prix d'achat invalide");
+    const n = Number(String(d.purchase_price).replace(/\s/g, '').replace(',', '.'));
+    if (Number.isNaN(n) || n < 0) throw new HttpError(400, "Prix d'achat invalide");
     d.purchase_price = n;
   }
+  if (d.acquisition_mode && !ACQUISITION_MODES.includes(d.acquisition_mode)) throw new HttpError(400, "Mode d'acquisition invalide");
+  for (const [k, label, min, max] of [['fiscal_year', 'Exercice', 1950, 2100], ['depreciation_years', "Durée d'amortissement", 1, 100]]) {
+    if (d[k] !== undefined && d[k] !== null) {
+      const n = Number(d[k]);
+      if (!Number.isInteger(n) || n < min || n > max) throw new HttpError(400, `${label} invalide`);
+      d[k] = n;
+    }
+  }
+  if (d.status === 'sorti') throw new HttpError(400, "La sortie d'inventaire passe par une proposition de sortie validée");
   return d;
 }
 
@@ -67,8 +91,7 @@ r.get('/', h(async (req, res) => {
   const dir = req.query.dir === 'asc' ? 'ASC' : 'DESC';
   const limit = Math.min(Number(req.query.limit) || 50, 1000);
   const page = Math.max(Number(req.query.page) || 1, 1);
-  const { n: total } = await db.get(`SELECT COUNT(*) AS n FROM assets a LEFT JOIN categories c ON c.id = a.category_id
-    LEFT JOIN locations l ON l.id = a.location_id LEFT JOIN sites s ON s.id = l.site_id ${sql}`, ...params);
+  const { n: total } = await db.get(`SELECT COUNT(*) AS n ${FROM_JOINS} ${sql}`, ...params);
   const items = await db.all(`${ASSET_SELECT} ${sql} ORDER BY ${sort} ${dir}, a.id DESC LIMIT ? OFFSET ?`,
     ...params, limit, (page - 1) * limit);
   res.json({ items, total, page, limit });
@@ -84,15 +107,25 @@ const CSV_COLUMNS = [
   { key: 'purchase_date', label: 'date_achat' },
   { label: 'prix_achat', get: (r) => (r.purchase_price ?? '') === '' ? '' : String(r.purchase_price).replace('.', ',') },
   { key: 'supplier', label: 'fournisseur' }, { key: 'warranty_end', label: 'fin_garantie' }, { key: 'notes', label: 'notes' },
+  { key: 'service_name', label: 'service' }, { key: 'inventory_number', label: 'n_inventaire' },
+  { label: 'compte', get: (r) => accountOf(r) || '' }, { key: 'acquisition_mode', label: 'mode_acquisition' },
+  { key: 'fiscal_year', label: 'exercice' }, { key: 'mandate_number', label: 'mandat' }, { key: 'invoice_number', label: 'facture' },
+  { key: 'contract_number', label: 'marche' }, { key: 'depreciation_years', label: 'duree_amortissement' },
+  { key: 'commissioning_date', label: 'mise_en_service' },
   { key: 'last_seen_at', label: 'dernier_inventaire' },
 ];
+const money = (n) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
 
 r.get('/export.csv', h(async (req, res) => {
   const { sql, params } = buildFilters(req.query);
   const rows = await db.all(`${ASSET_SELECT} ${sql} ORDER BY a.code`, ...params);
+  const settings = await accountingSettings();
+  const cols = [...CSV_COLUMNS,
+    { label: 'amortissements_cumules', get: (r) => money(depreciation(r, settings).accumulated) },
+    { label: 'valeur_nette_comptable', get: (r) => money(depreciation(r, settings).net_book_value) }];
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="samc-invent-equipements-${new Date().toISOString().slice(0, 10)}.csv"`);
-  res.send(toCsv(rows, CSV_COLUMNS));
+  res.send(toCsv(rows, cols));
 }));
 
 r.get('/import-template.csv', (req, res) => {
@@ -102,7 +135,9 @@ r.get('/import-template.csv', (req, res) => {
     code: '', label: 'PC portable Dell Latitude 5440', category_name: 'Ordinateur portable', brand: 'Dell', model: 'Latitude 5440',
     serial_number: 'ABC123XYZ', site_name: 'Siège', building: 'A', floor: '1', location_name: 'Bureau 101', assigned_to: 'Jean Dupont',
     status: 'en_service', condition: 'bon', purchase_date: '2024-03-15', purchase_price: 1150, supplier: 'Fournisseur X',
-    warranty_end: '2027-03-15', notes: '',
+    warranty_end: '2027-03-15', notes: '', service_name: 'Direction générale', inventory_number: '2024-0001', account_code: '2183',
+    acquisition_mode: 'achat', fiscal_year: 2024, mandate_number: '2024-000123', invoice_number: 'F24-0456', contract_number: 'MAPA-2024-03',
+    depreciation_years: '', commissioning_date: '2024-03-20',
   }], CSV_COLUMNS.filter((c) => !['family', 'location_code', 'last_seen_at'].includes(c.label))));
 });
 
@@ -113,7 +148,7 @@ r.post('/import', manage, upload.single('file'), h(async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Fichier CSV manquant');
   const rows = parseCsv(req.file.buffer.toString('utf8'));
   const dryRun = req.query.dry_run === '1';
-  const report = { created: 0, updated: 0, errors: [], created_refs: { sites: 0, locations: 0, categories: 0 } };
+  const report = { created: 0, updated: 0, errors: [], created_refs: { sites: 0, locations: 0, categories: 0, services: 0 } };
   const norm = (v) => (v === undefined || v === '' ? null : v);
 
   const run = async (t) => {
@@ -155,9 +190,27 @@ r.post('/import', manage, upload.single('file'), h(async (req, res) => {
           }
           location_id = loc.id;
         }
+        // Service gestionnaire
+        let service_id = null;
+        if (norm(row.service)) {
+          let sv = await t.get('SELECT id FROM services WHERE lower(name) = lower(?)', row.service);
+          if (!sv) {
+            sv = { id: (await t.run('INSERT INTO services(name) VALUES (?)', row.service)).lastInsertRowid };
+            report.created_refs.services++;
+          }
+          service_id = sv.id;
+        }
+        const mode = norm(row.mode_acquisition) || 'achat';
+        if (!ACQUISITION_MODES.includes(mode)) throw new Error(`mode d'acquisition "${mode}" invalide`);
+        const int = (v, label) => {
+          if (norm(v) === null) return null;
+          const n = Number(v);
+          if (!Number.isInteger(n)) throw new Error(`${label} invalide`);
+          return n;
+        };
         const status = norm(row.statut) || 'en_service';
         const condition = norm(row.etat) || 'bon';
-        if (!STATUSES.includes(status)) throw new Error(`statut "${status}" invalide`);
+        if (!STATUSES.includes(status) || status === 'sorti') throw new Error(`statut "${status}" invalide`);
         if (!CONDITIONS.includes(condition)) throw new Error(`état "${condition}" invalide`);
         const price = norm(row.prix_achat) === null ? null : Number(String(row.prix_achat).replace(/\s/g, '').replace(',', '.'));
         if (price !== null && Number.isNaN(price)) throw new Error('prix invalide');
@@ -165,6 +218,10 @@ r.post('/import', manage, upload.single('file'), h(async (req, res) => {
           label, category_id, brand: norm(row.marque), model: norm(row.modele), serial_number: norm(row.numero_serie),
           location_id, assigned_to: norm(row.affecte_a), status, condition, purchase_date: norm(row.date_achat),
           purchase_price: price, supplier: norm(row.fournisseur), warranty_end: norm(row.fin_garantie), notes: norm(row.notes),
+          service_id, inventory_number: norm(row.n_inventaire), account_code: norm(row.compte), acquisition_mode: mode,
+          fiscal_year: int(row.exercice, 'exercice') ?? (norm(row.date_achat) ? Number(String(row.date_achat).slice(0, 4)) : null),
+          mandate_number: norm(row.mandat), invoice_number: norm(row.facture), contract_number: norm(row.marche),
+          depreciation_years: int(row.duree_amortissement, "durée d'amortissement"), commissioning_date: norm(row.mise_en_service),
         };
         const existing = norm(row.code) ? await t.get('SELECT id FROM assets WHERE code = ?', row.code) : null;
         if (existing) {
@@ -204,9 +261,9 @@ r.get('/by-code/:code', h(async (req, res) => {
 r.post('/bulk', manage, h(async (req, res) => {
   const { ids = [], action, value } = req.body || {};
   if (!Array.isArray(ids) || !ids.length) throw new HttpError(400, 'Aucun équipement sélectionné');
-  const map = { move: 'location_id', status: 'status', condition: 'condition', category: 'category_id', delete: null };
+  const map = { move: 'location_id', status: 'status', condition: 'condition', category: 'category_id', service: 'service_id', delete: null };
   if (!(action in map)) throw new HttpError(400, 'Action inconnue');
-  if (action === 'status' && !STATUSES.includes(value)) throw new HttpError(400, 'Statut invalide');
+  if (action === 'status' && (!STATUSES.includes(value) || value === 'sorti')) throw new HttpError(400, 'Statut invalide');
   if (action === 'condition' && !CONDITIONS.includes(value)) throw new HttpError(400, 'État invalide');
   if (action === 'delete' && req.user.role !== 'admin') throw new HttpError(403, 'Suppression réservée aux administrateurs');
   await tx(async (t) => {
@@ -231,14 +288,21 @@ r.get('/:id', h(async (req, res) => {
   const scans = await db.all(`SELECT sc.*, c.name AS campaign_name, u.name AS user_name, l.name AS location_name
     FROM scans sc JOIN campaigns c ON c.id = sc.campaign_id LEFT JOIN users u ON u.id = sc.user_id
     LEFT JOIN locations l ON l.id = sc.location_id WHERE sc.asset_id = ? ORDER BY sc.scanned_at DESC LIMIT 50`, a.id);
-  res.json({ ...a, history, scans });
+  const disposals = await db.all(`SELECT d.*, u.name AS proposed_by_name, v.name AS validated_by_name FROM disposals d
+    LEFT JOIN users u ON u.id = d.proposed_by LEFT JOIN users v ON v.id = d.validated_by
+    WHERE d.asset_id = ? ORDER BY d.id DESC`, a.id);
+  res.json({ ...a, account: accountOf(a), depreciation: depreciation(a, await accountingSettings()), history, scans, disposals });
 }));
 
 // ---------- Création ----------
 r.post('/', manage, h(async (req, res) => {
   const d = validate(pick(req.body, FIELDS));
   if (!d.label) throw new HttpError(400, 'La désignation est requise');
+  if (!d.fiscal_year && d.purchase_date) d.fiscal_year = Number(String(d.purchase_date).slice(0, 4));
   const id = await tx(async (t) => {
+    if (d.inventory_number && await t.get('SELECT 1 AS ok FROM assets WHERE inventory_number = ?', d.inventory_number)) {
+      throw new HttpError(409, `Le n° d'inventaire ${d.inventory_number} est déjà attribué`);
+    }
     d.code = d.code ? String(d.code).trim() : await nextAssetCode(t);
     if (await t.get('SELECT 1 AS ok FROM assets WHERE code = ?', d.code)) throw new HttpError(409, `Le code ${d.code} existe déjà`);
     const keys = Object.keys(d).filter((k) => d[k] !== null);
@@ -264,6 +328,11 @@ r.put('/:id', manage, h(async (req, res) => {
   }
   if ('status' in d && !d.status) delete d.status;
   if ('condition' in d && !d.condition) delete d.condition;
+  if ('acquisition_mode' in d && !d.acquisition_mode) delete d.acquisition_mode;
+  if (before.status === 'sorti') throw new HttpError(409, "Ce bien est sorti de l'inventaire : il n'est plus modifiable");
+  if (d.inventory_number && await db.get('SELECT 1 AS ok FROM assets WHERE inventory_number = ? AND id <> ?', d.inventory_number, before.id)) {
+    throw new HttpError(409, `Le n° d'inventaire ${d.inventory_number} est déjà attribué`);
+  }
   const changes = {};
   for (const k of Object.keys(d)) {
     // eslint-disable-next-line eqeqeq
@@ -303,6 +372,7 @@ r.post('/:id/photo', manage, photoUpload.single('photo'), h(async (req, res) => 
 async function deleteAsset(t, id) {
   await t.run('DELETE FROM asset_history WHERE asset_id = ?', id);
   await t.run('DELETE FROM campaign_expected WHERE asset_id = ?', id);
+  await t.run('DELETE FROM disposals WHERE asset_id = ?', id);
   await t.run('UPDATE scans SET asset_id = NULL, resolved_asset_id = NULL WHERE asset_id = ? OR resolved_asset_id = ?', id, id);
   await t.run('DELETE FROM assets WHERE id = ?', id);
 }

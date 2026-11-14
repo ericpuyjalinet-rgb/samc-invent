@@ -88,30 +88,63 @@ r.delete('/locations/:id', manage, h(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- Services gestionnaires (organigramme) ----------
+const SV_SELECT = `SELECT sv.*, p.name AS parent_name,
+    (SELECT COUNT(*) FROM assets a WHERE a.service_id = sv.id AND a.status <> 'sorti') AS asset_count
+  FROM services sv LEFT JOIN services p ON p.id = sv.parent_id`;
+r.get('/services', h(async (req, res) => {
+  res.json(await db.all(`${SV_SELECT} ORDER BY COALESCE(p.name, sv.name), sv.parent_id NULLS FIRST, sv.name`));
+}));
+const SV_FIELDS = ['name', 'code', 'parent_id', 'manager_name'];
+r.post('/services', manage, h(async (req, res) => {
+  const d = pick(req.body, SV_FIELDS);
+  if (!d.name) throw new HttpError(400, 'Nom requis');
+  const info = await uniqueGuard(() => db.run('INSERT INTO services(name, code, parent_id, manager_name) VALUES (?, ?, ?, ?)',
+    d.name, d.code, d.parent_id, d.manager_name));
+  res.status(201).json(await db.get(`${SV_SELECT} WHERE sv.id = ?`, info.lastInsertRowid));
+}));
+r.put('/services/:id', manage, h(async (req, res) => {
+  const d = pick(req.body, SV_FIELDS);
+  if (!d.name) throw new HttpError(400, 'Nom requis');
+  if (Number(d.parent_id) === Number(req.params.id)) throw new HttpError(400, 'Un service ne peut pas dépendre de lui-même');
+  await uniqueGuard(() => db.run('UPDATE services SET name = ?, code = ?, parent_id = ?, manager_name = ? WHERE id = ?',
+    d.name, d.code, d.parent_id, d.manager_name, req.params.id));
+  res.json(await db.get(`${SV_SELECT} WHERE sv.id = ?`, req.params.id));
+}));
+r.delete('/services/:id', manage, h(async (req, res) => {
+  await tx(async (t) => {
+    await t.run('UPDATE assets SET service_id = NULL WHERE service_id = ?', req.params.id);
+    await t.run('UPDATE services SET parent_id = NULL WHERE parent_id = ?', req.params.id);
+    await t.run('DELETE FROM services WHERE id = ?', req.params.id);
+  });
+  res.json({ ok: true });
+}));
+
 // ---------- Catégories ----------
 r.get('/categories', h(async (req, res) => {
   res.json(await db.all(`SELECT c.*, (SELECT COUNT(*) FROM assets a WHERE a.category_id = c.id) AS asset_count
     FROM categories c ORDER BY c.family, c.name`));
 }));
 r.post('/categories', manage, h(async (req, res) => {
-  const d = pick(req.body, ['name', 'family', 'depreciation_years']);
+  const d = pick(req.body, ['name', 'family', 'depreciation_years', 'account_code']);
   if (!d.name) throw new HttpError(400, 'Nom requis');
   if (!FAMILIES.includes(d.family || 'autre')) throw new HttpError(400, 'Famille invalide');
-  const info = await uniqueGuard(() => db.run('INSERT INTO categories(name, family, depreciation_years) VALUES (?, ?, ?)',
-    d.name, d.family || 'autre', d.depreciation_years));
+  const info = await uniqueGuard(() => db.run('INSERT INTO categories(name, family, depreciation_years, account_code) VALUES (?, ?, ?, ?)',
+    d.name, d.family || 'autre', d.depreciation_years, d.account_code));
   res.status(201).json(await db.get('SELECT * FROM categories WHERE id = ?', info.lastInsertRowid));
 }));
 r.put('/categories/:id', manage, h(async (req, res) => {
-  const d = pick(req.body, ['name', 'family', 'depreciation_years']);
+  const d = pick(req.body, ['name', 'family', 'depreciation_years', 'account_code']);
   if (!d.name) throw new HttpError(400, 'Nom requis');
   if (!FAMILIES.includes(d.family || 'autre')) throw new HttpError(400, 'Famille invalide');
-  await uniqueGuard(() => db.run('UPDATE categories SET name = ?, family = ?, depreciation_years = ? WHERE id = ?',
-    d.name, d.family || 'autre', d.depreciation_years, req.params.id));
+  await uniqueGuard(() => db.run('UPDATE categories SET name = ?, family = ?, depreciation_years = ?, account_code = ? WHERE id = ?',
+    d.name, d.family || 'autre', d.depreciation_years, d.account_code, req.params.id));
   res.json(await db.get('SELECT * FROM categories WHERE id = ?', req.params.id));
 }));
 r.delete('/categories/:id', manage, h(async (req, res) => {
   await tx(async (t) => {
     await t.run('UPDATE assets SET category_id = NULL WHERE category_id = ?', req.params.id);
+    await t.run('UPDATE scans SET unknown_category_id = NULL WHERE unknown_category_id = ?', req.params.id);
     await t.run('DELETE FROM categories WHERE id = ?', req.params.id);
   });
   res.json({ ok: true });

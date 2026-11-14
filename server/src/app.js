@@ -13,6 +13,8 @@ import assetRoutes from './routes/assets.js';
 import campaignRoutes from './routes/campaigns.js';
 import mobileRoutes from './routes/mobile.js';
 import dashboardRoutes from './routes/dashboard.js';
+import disposalRoutes from './routes/disposals.js';
+import accountingRoutes from './routes/accounting.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,6 +53,8 @@ app.use('/api/users', authenticate, userRoutes);
 app.use('/api/mobile', authenticate, mobileRoutes);
 app.use('/api/assets', authenticate, assetRoutes);
 app.use('/api/campaigns', authenticate, requireRole(...MANAGERS), campaignRoutes);
+app.use('/api/disposals', authenticate, disposalRoutes);
+app.use('/api/accounting', authenticate, accountingRoutes);
 app.use('/api', authenticate, refRoutes);
 app.use('/api', authenticate, dashboardRoutes);
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d', immutable: true }));

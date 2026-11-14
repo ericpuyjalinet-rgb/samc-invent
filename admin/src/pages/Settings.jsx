@@ -32,6 +32,12 @@ export default function Settings() {
             <Field label="Nom de l'organisation" span={2} hint="Imprimé sur les étiquettes"><input value={s.organization_name} onChange={(e) => setS({ ...s, organization_name: e.target.value })} /></Field>
             <Field label="Préfixe des codes inventaire" hint={`Ex. ${s.code_prefix || 'SAMC'}-000123`}><input value={s.code_prefix} onChange={(e) => setS({ ...s, code_prefix: e.target.value.toUpperCase() })} className="mono" /></Field>
             <Field label="Mention bas d'étiquette"><input value={s.label_footer} onChange={(e) => setS({ ...s, label_footer: e.target.value })} /></Field>
+            <Field label="SIRET de la collectivité" hint="Repris sur les procès-verbaux"><input value={s.organization_siret} onChange={(e) => setS({ ...s, organization_siret: e.target.value })} className="mono" /></Field>
+            <Field label="Comptable public" hint="Ex. Service de gestion comptable de …"><input value={s.accountant_name} onChange={(e) => setS({ ...s, accountant_name: e.target.value })} /></Field>
+            <h2 className="span-2" style={{ marginTop: 8 }}>Comptabilité (M57)</h2>
+            <label className="check span-2"><input type="checkbox" checked={s.depreciation_enabled} onChange={(e) => setS({ ...s, depreciation_enabled: e.target.checked })} />
+              <span>Calculer l'amortissement des biens<br /><span className="small muted">À décocher pour une commune non soumise à l'obligation d'amortir : la valeur nette reste égale à la valeur brute.</span></span></label>
+            <Field label="Seuil des biens de faible valeur (€ TTC)" hint="Biens amortis sur un an, selon la délibération"><input type="number" min="0" value={s.low_value_threshold} onChange={(e) => setS({ ...s, low_value_threshold: e.target.value })} /></Field>
             <div className="span-2"><button className="btn btn-primary">Enregistrer</button></div>
           </form>
         )}

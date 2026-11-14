@@ -1,6 +1,6 @@
 # SAMC Invent
 
-Logiciel d'inventaire d'équipements : matériel informatique, mobilier de bureau et autres biens.
+Logiciel d'inventaire des biens mobiliers des collectivités territoriales et établissements publics : matériel informatique, mobilier de bureau et autres biens. Il tient l'inventaire physique (étiquettes QR, campagnes de recensement sur mobile) et l'inventaire comptable (nomenclature M57, amortissement, sorties d'inventaire), à rapprocher de l'état de l'actif du comptable public.
 
 | Application | URL | Utilisateurs |
 |---|---|---|
@@ -18,6 +18,13 @@ Logiciel d'inventaire d'équipements : matériel informatique, mobilier de burea
 - Campagnes d'inventaire : périmètre (salles), lancement (photo figée des équipements attendus), suivi en temps réel par salle, rapprochement **trouvés / déplacés / restants-manquants / inconnus / hors périmètre**, intégration des équipements inconnus au parc, clôture avec report automatique des déplacements, des états constatés et passage des manquants en « Perdu ». Rapport CSV.
 - Import CSV (avec simulation, création automatique des sites / salles / catégories) et export CSV compatibles Excel.
 - Utilisateurs et rôles : administrateur, gestionnaire, agent.
+
+**Gestion publique**
+- Services gestionnaires (organigramme direction › service) et affectation des biens.
+- Inventaire comptable M57 : n° d'inventaire, compte d'imputation (2183, 2184, 2188…), exercice, mode d'acquisition (achat, don, transfert, mise à disposition, location), n° de mandat, de facture, de marché public.
+- Amortissement linéaire au prorata temporis depuis la mise en service, durée par catégorie (délibération), biens de faible valeur amortis sur un an (seuil paramétrable), amortissement désactivable pour les communes non soumises.
+- Sorties d'inventaire : proposition (motif : obsolescence, panne, vol, perte, destruction, cession, don, transfert), validation par l'administrateur au vu d'un certificat administratif, d'une décision ou d'une délibération, valeur brute et valeur nette figées à la sortie, procès-verbal imprimable, état des sorties de l'exercice (CSV) pour le comptable public. Les biens manquants à la clôture d'une campagne sont proposés à la sortie (motif « perte »).
+- État de l'actif à une date : par compte, valeur brute, amortissements cumulés, valeur nette comptable, points de contrôle ; détail par bien en CSV.
 
 **Application mobile (PWA)**
 - Installable sur l'écran d'accueil (Android / iOS), fonctionne **hors-ligne**.

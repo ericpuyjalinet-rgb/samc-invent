@@ -208,3 +208,8 @@ td .title { font-weight: 500; }
   .card { border: 0; box-shadow: none; }
   .label { border-color: #e2e8f0; }
 }
+
+tfoot td { background: var(--surface-2); border-top: 2px solid var(--border); }
+.pv-table th, .pv-table td { padding: 7px 8px; font-size: 12.5px; }
+.signature { border-top: 1px solid var(--border); padding-top: 10px; min-height: 110px; }
+@media print { .pv { font-size: 12px; } .pv .card-pad { padding: 0; } }

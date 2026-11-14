@@ -43,10 +43,17 @@ export default function Dashboard() {
 
       <div className="grid grid-4">
         <Stat label="Équipements" value={t.assets} sub={`${t.active} actifs`} />
-        <Stat label="Valeur d'acquisition" value={fmtMoney(t.value)} sub="hors équipements réformés" tone="blue" />
+        <Stat label="Valeur nette comptable" value={fmtMoney(t.net_value)} sub={`valeur brute ${fmtMoney(t.value)}`} tone="blue" />
         <Stat label="Sites / salles" value={`${t.sites} / ${t.locations}`} sub={`${t.no_location} équipement(s) non localisé(s)`} />
         <Stat label="Jamais inventoriés" value={t.never_seen} sub={`${t.warranty_soon} garantie(s) expirant sous 90 j`} tone={t.never_seen ? 'amber' : 'green'} />
       </div>
+
+      {(t.disposals_pending > 0 || t.no_inventory_number > 0) && (
+        <div className="info-box row gap wrap">
+          {t.disposals_pending > 0 && <span><strong>{t.disposals_pending}</strong> proposition(s) de sortie à valider — <Link to="/sorties">Sorties d'inventaire</Link></span>}
+          {t.no_inventory_number > 0 && <span><strong>{t.no_inventory_number}</strong> bien(s) sans n° d'inventaire comptable — <Link to="/actif">État de l'actif</Link></span>}
+        </div>
+      )}
 
       <div className="grid grid-3">
         <div className="card card-pad"><h3>Par famille</h3><Bars rows={data.by_family} map={FAMILY} labelKey="family" /></div>
@@ -56,7 +63,7 @@ export default function Dashboard() {
 
       <div className="grid grid-2">
         <div className="card card-pad"><h3>Top catégories</h3><Bars rows={data.by_category} /></div>
-        <div className="card card-pad"><h3>Par site</h3><Bars rows={data.by_site} /></div>
+        <div className="card card-pad"><h3>Par service</h3><Bars rows={data.by_service} /></div>
       </div>
 
       <div className="grid grid-2">

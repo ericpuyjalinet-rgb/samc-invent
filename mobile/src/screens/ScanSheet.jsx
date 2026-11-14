@@ -45,6 +45,8 @@ export default function ScanSheet({ draft, idx, room, categories, onCancel, onSa
             <div className="small muted">{[a.category_name, [a.brand, a.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}</div>
             {a.serial_number && <div className="small">S/N <span className="mono">{a.serial_number}</span></div>}
             {a.assigned_to && <div className="small">👤 {a.assigned_to}</div>}
+            {(a.service_name || a.inventory_number) && <div className="small muted">{[a.service_name, a.inventory_number && `Inv. ${a.inventory_number}`].filter(Boolean).join(' · ')}</div>}
+            {a.status === 'sorti' && <div className="small" style={{ color: 'var(--red)' }}>Ce bien est sorti de l'inventaire</div>}
           </div>
         )}
 

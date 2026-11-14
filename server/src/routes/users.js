@@ -46,6 +46,8 @@ r.delete('/:id', h(async (req, res) => {
     await t.run('UPDATE asset_history SET user_id = NULL WHERE user_id = ?', id);
     await t.run('UPDATE scans SET user_id = NULL WHERE user_id = ?', id);
     await t.run('UPDATE campaigns SET created_by = NULL WHERE created_by = ?', id);
+    await t.run('UPDATE disposals SET proposed_by = NULL WHERE proposed_by = ?', id);
+    await t.run('UPDATE disposals SET validated_by = NULL WHERE validated_by = ?', id);
     await t.run('DELETE FROM users WHERE id = ?', id);
   });
   res.json({ ok: true });

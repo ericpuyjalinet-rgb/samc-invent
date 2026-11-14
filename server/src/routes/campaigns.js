@@ -207,6 +207,7 @@ r.delete('/:id', manage, h(async (req, res) => {
   if (c.status === 'en_cours' && req.user.role !== 'admin') throw new HttpError(403, 'Seul un administrateur peut supprimer une campagne en cours');
   await tx(async (t) => {
     for (const table of ['scans', 'campaign_expected', 'campaign_locations']) await t.run(`DELETE FROM ${table} WHERE campaign_id = ?`, c.id);
+    await t.run('UPDATE disposals SET campaign_id = NULL WHERE campaign_id = ?', c.id);
     await t.run('DELETE FROM campaigns WHERE id = ?', c.id);
   });
   res.json({ ok: true });
@@ -253,6 +254,11 @@ r.post('/:id/close', manage, h(async (req, res) => {
       for (const a of rep.missing) {
         await t.run(`UPDATE assets SET status = 'perdu', updated_at = now() WHERE id = ?`, a.id);
         await logHistory(a.id, req.user.id, 'inventaire_manquant', { status: [a.status, 'perdu'], campagne: c.name }, t);
+        // Fonction publique : un bien manquant est proposé à la sortie d'inventaire (motif « perte »), sans sortie automatique
+        if (!(await t.get(`SELECT 1 AS ok FROM disposals WHERE asset_id = ? AND status = 'proposee'`, a.id))) {
+          await t.run(`INSERT INTO disposals(asset_id, reason, reason_details, proposed_by, previous_status, campaign_id)
+            VALUES (?, 'perte', ?, ?, ?, ?)`, a.id, `Non retrouvé lors de la campagne « ${c.name} »`, req.user.id, a.status, c.id);
+        }
         summary.missing++;
       }
     }

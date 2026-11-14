@@ -13,6 +13,9 @@ import Categories from './pages/Categories.jsx';
 import Users from './pages/Users.jsx';
 import ImportPage from './pages/Import.jsx';
 import Settings from './pages/Settings.jsx';
+import Disposals, { DisposalReport } from './pages/Disposals.jsx';
+import Accounting from './pages/Accounting.jsx';
+import Services from './pages/Services.jsx';
 import { ROLE } from './labels.js';
 
 const NAV = [
@@ -24,8 +27,12 @@ const NAV = [
   { to: '/import', label: 'Import / Export', ico: '⇅' },
   { section: 'Inventaire' },
   { to: '/campagnes', label: 'Campagnes', ico: '✓' },
+  { section: 'Patrimoine comptable' },
+  { to: '/actif', label: "État de l'actif", ico: '€' },
+  { to: '/sorties', label: "Sorties d'inventaire", ico: '⇥' },
   { section: 'Référentiels' },
   { to: '/localisations', label: 'Sites & salles', ico: '⌂' },
+  { to: '/services', label: 'Services', ico: '⚑' },
   { to: '/categories', label: 'Catégories', ico: '◈' },
   { section: 'Administration', admin: true },
   { to: '/utilisateurs', label: 'Utilisateurs', ico: '☺', admin: true },
@@ -68,6 +75,10 @@ export default function App() {
           <Route path="/campagnes/:id" element={<CampaignDetail />} />
           <Route path="/localisations" element={<Locations />} />
           <Route path="/categories" element={<Categories />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/actif" element={<Accounting />} />
+          <Route path="/sorties" element={<Disposals />} />
+          <Route path="/sorties/proces-verbal" element={<DisposalReport />} />
           {isAdmin && <Route path="/utilisateurs" element={<Users />} />}
           <Route path="/parametres" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

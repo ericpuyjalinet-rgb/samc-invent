@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { Empty, Field, MapBadge, Spinner, useConfirm, useLoad, useToast } from '../components/ui.jsx';
 import { invalidateRefs } from '../components/refs.js';
 import CrudModal from '../components/CrudModal.jsx';
-import { FAMILY } from '../labels.js';
+import { FAMILY, M57_ACCOUNTS } from '../labels.js';
 
 export default function Categories() {
   const toast = useToast();
@@ -33,11 +33,12 @@ export default function Categories() {
       <div className="card">
         {!data.length ? <Empty title="Aucune catégorie" /> : (
           <table>
-            <thead><tr><th>Nom</th><th>Famille</th><th>Amortissement</th><th>Équipements</th><th /></tr></thead>
+            <thead><tr><th>Nom</th><th>Famille</th><th>Compte M57</th><th>Amortissement</th><th>Équipements</th><th /></tr></thead>
             <tbody>{data.map((c) => (
               <tr key={c.id}>
                 <td className="title">{c.name}</td>
                 <td><MapBadge map={FAMILY} value={c.family} /></td>
+                <td className="mono" title={M57_ACCOUNTS[c.account_code] || ''}>{c.account_code || <span className="badge badge-amber">à renseigner</span>}</td>
                 <td>{c.depreciation_years ? `${c.depreciation_years} ans` : '—'}</td>
                 <td><Link to={`/equipements?category_id=${c.id}`}>{c.asset_count}</Link></td>
                 <td className="actions">
@@ -51,14 +52,20 @@ export default function Categories() {
       </div>
       {edit && (
         <CrudModal title={edit.id ? 'Modifier la catégorie' : 'Nouvelle catégorie'}
-          initial={{ name: edit.name || '', family: edit.family || 'informatique', depreciation_years: edit.depreciation_years || '' }}
+          initial={{ name: edit.name || '', family: edit.family || 'informatique', depreciation_years: edit.depreciation_years || '', account_code: edit.account_code || '' }}
           onClose={() => setEdit(null)} onSubmit={save}>
           {(d, set) => (<>
             <Field label="Nom *" span={2}><input value={d.name} onChange={set('name')} required autoFocus /></Field>
             <Field label="Famille">
               <select value={d.family} onChange={set('family')}>{Object.entries(FAMILY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
             </Field>
-            <Field label="Durée d'amortissement (ans)"><input type="number" min="0" value={d.depreciation_years} onChange={set('depreciation_years')} /></Field>
+            <Field label="Durée d'amortissement (ans)" hint="Fixée par délibération"><input type="number" min="0" value={d.depreciation_years} onChange={set('depreciation_years')} /></Field>
+            <Field label="Compte d'imputation M57" span={2}>
+              <select value={d.account_code} onChange={set('account_code')}>
+                <option value="">— Non renseigné —</option>
+                {Object.entries(M57_ACCOUNTS).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+              </select>
+            </Field>
           </>)}
         </CrudModal>
       )}

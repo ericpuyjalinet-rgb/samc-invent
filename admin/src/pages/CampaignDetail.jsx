@@ -242,7 +242,7 @@ function CloseDialog({ campaign, onClose, onDone }) {
         <label className="check"><input type="checkbox" checked={opts.apply_conditions} onChange={set('apply_conditions')} />
           <span>Reporter l'état constaté par les agents (neuf, bon, moyen…)</span></label>
         <label className="check"><input type="checkbox" checked={opts.mark_missing} onChange={set('mark_missing')} />
-          <span>Passer les <strong>{s.missing}</strong> équipement(s) manquant(s) au statut <span className="badge badge-red">Perdu</span></span></label>
+          <span>Passer les <strong>{s.missing}</strong> équipement(s) manquant(s) au statut <span className="badge badge-red">Perdu</span> et les proposer à la sortie d'inventaire (motif « perte »)<br /><span className="small muted">La sortie restera à valider par une décision, dans « Sorties d'inventaire ».</span></span></label>
         {s.unknown > 0 && <div className="info-box">{s.unknown} équipement(s) inconnu(s) n'ont pas été intégrés au parc. Vous pourrez encore les traiter après la clôture.</div>}
       </div>
     </Modal>

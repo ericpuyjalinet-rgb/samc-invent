@@ -4,6 +4,7 @@ export const STATUS = {
   en_reparation: { label: 'En réparation', tone: 'amber' },
   reforme: { label: 'Réformé', tone: 'gray' },
   perdu: { label: 'Perdu', tone: 'red' },
+  sorti: { label: "Sorti de l'inventaire", tone: 'gray' },
 };
 export const CONDITION = {
   neuf: { label: 'Neuf', tone: 'green' },
@@ -31,12 +32,43 @@ export const ACTION = {
   creation: 'Création', modification: 'Modification', deplacement: 'Déplacement', photo: 'Photo ajoutée',
   import_creation: 'Création (import)', import_maj: 'Mise à jour (import)', inventaire_deplacement: 'Déplacement (inventaire)',
   inventaire_etat: 'État mis à jour (inventaire)', inventaire_manquant: 'Déclaré manquant (inventaire)',
+  sortie_proposee: 'Proposé à la sortie', sortie_validee: "Sorti de l'inventaire", sortie_annulee: 'Proposition de sortie annulée',
 };
 export const FIELD_LABEL = {
   code: 'Code', label: 'Désignation', category_id: 'Catégorie', brand: 'Marque', model: 'Modèle', serial_number: 'N° de série',
   location_id: 'Localisation', assigned_to: 'Affecté à', status: 'Statut', condition: 'État', purchase_date: "Date d'achat",
   purchase_price: "Prix d'achat", supplier: 'Fournisseur', warranty_end: 'Fin de garantie', notes: 'Notes',
+  service_id: 'Service', inventory_number: "N° d'inventaire", account_code: 'Compte', acquisition_mode: "Mode d'acquisition",
+  fiscal_year: 'Exercice', mandate_number: 'N° de mandat', invoice_number: 'N° de facture', contract_number: 'Marché',
+  depreciation_years: "Durée d'amortissement", commissioning_date: 'Mise en service', motif: 'Motif', decision: 'Décision',
 };
+
+export const ACQUISITION_MODE = {
+  achat: 'Achat', don: 'Don', transfert: 'Transfert (autre collectivité)', mise_a_disposition: 'Mise à disposition',
+  location: 'Location / crédit-bail', autre: 'Autre',
+};
+export const DISPOSAL_REASON = {
+  obsolescence: 'Obsolescence', panne: 'Panne / hors d\'usage', vol: 'Vol', perte: 'Perte', destruction: 'Destruction',
+  cession: 'Cession (vente)', don: 'Don (association, école…)', transfert: 'Transfert à une autre collectivité', autre: 'Autre',
+};
+export const DECISION_TYPE = {
+  certificat_administratif: 'Certificat administratif', decision: 'Décision du maire / président', deliberation: 'Délibération',
+};
+export const DISPOSAL_STATUS = {
+  proposee: { label: 'Proposée', tone: 'amber' },
+  validee: { label: 'Validée', tone: 'green' },
+  annulee: { label: 'Annulée', tone: 'gray' },
+};
+/** Comptes d'immobilisations M57 les plus courants pour un inventaire de mobilier et de matériel. */
+export const M57_ACCOUNTS = {
+  2051: 'Concessions et droits similaires (logiciels)',
+  2158: 'Autres installations, matériel et outillage techniques',
+  2182: 'Matériel de transport',
+  2183: 'Matériel de bureau et matériel informatique',
+  2184: 'Mobilier',
+  2188: 'Autres immobilisations corporelles',
+};
+export const accountLabel = (c) => (c ? `${c}${M57_ACCOUNTS[c] ? ` — ${M57_ACCOUNTS[c]}` : ''}` : '—');
 
 export const fmtDate = (d) => (d ? new Date(d.length <= 10 ? `${d}T00:00:00` : d.replace(' ', 'T') + (d.includes('Z') || d.includes('T') ? '' : 'Z')).toLocaleDateString('fr-FR') : '—');
 export const fmtDateTime = (d) => {
